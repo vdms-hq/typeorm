@@ -24,7 +24,7 @@
     "include": [
       "sample",
       "src",
-      "test", "copy issue-2032.ts"
+      "test"
     ],
     "exclude": [
         "tmp",
