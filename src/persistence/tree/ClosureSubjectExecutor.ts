@@ -2,8 +2,8 @@ import {Subject} from "../Subject";
 import {QueryRunner} from "../../query-runner/QueryRunner";
 import {ObjectLiteral} from "../../common/ObjectLiteral";
 import {CannotAttachTreeChildrenEntityError} from "../../error/CannotAttachTreeChildrenEntityError";
-import {DeleteQueryBuilder} from '../../query-builder/DeleteQueryBuilder';
-import {OrmUtils} from '../../util/OrmUtils';
+import {DeleteQueryBuilder} from "../../query-builder/DeleteQueryBuilder";
+import {OrmUtils} from "../../util/OrmUtils";
 
 /**
  * Executes subject operations for closure entities.

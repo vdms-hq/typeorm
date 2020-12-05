@@ -1,7 +1,7 @@
 import {Subject} from "../Subject";
 import {QueryRunner} from "../../query-runner/QueryRunner";
-import {OrmUtils} from '../../util/OrmUtils';
-import {ObjectLiteral} from '../../common/ObjectLiteral';
+import {OrmUtils} from "../../util/OrmUtils";
+import {ObjectLiteral} from "../../common/ObjectLiteral";
 
 /**
  * Executes subject operations for materialized-path tree entities.
