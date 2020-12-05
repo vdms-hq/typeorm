@@ -290,7 +290,7 @@ export class NestedSetSubjectExecutor {
         }).join(" AND ");
 
         const countAlias = "count";
-        const result = await this.queryRunner.query(`SELECT COUNT(1) AS ${escape(countAlias)} FROM ${tableName} WHERE ${whereCondition} LIMIT 1`, parameters);
+        const result = await this.queryRunner.query(`SELECT COUNT(1) AS ${escape(countAlias)} FROM ${tableName} WHERE ${whereCondition}`, parameters);
 
         return parseInt(result[0][countAlias]) === 0;
     }
