@@ -131,7 +131,7 @@ export class NestedSetSubjectExecutor {
             if (entityNs !== undefined && parentNs !== undefined) {
                 const isMovingUp = parentNs.left > entityNs.left;
                 const treeSize = entityNs.right - entityNs.left + 1;
-                // let entitySize = parentNs.left - entityNs.left + 1;
+
                 let entitySize: number;
                 if (isMovingUp) {
                     entitySize = parentNs.left - entityNs.right;
@@ -139,9 +139,6 @@ export class NestedSetSubjectExecutor {
                     entitySize = parentNs.right - entityNs.left;
                 }
                 
-                // if (isMovingUp)
-                //     entitySize -= treeSize;
-
                 // Moved entity logic
                 const updateLeftSide = 
                     `WHEN ${leftColumnName} >= ${entityNs.left} AND ` +
