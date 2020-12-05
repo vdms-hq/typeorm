@@ -116,14 +116,14 @@ export class ClosureJunctionEntityMetadataBuilder {
                 referencedEntityMetadata: parentClosureEntityMetadata,
                 columns: [entityMetadata.ownColumns[0]],
                 referencedColumns: parentClosureEntityMetadata.primaryColumns,
-                // onDelete: "CASCADE" // todo: does not work in mssql for some reason
+                onDelete: "CASCADE" // todo: does not work in mssql for some reason
             }),
             new ForeignKeyMetadata({
                 entityMetadata: entityMetadata,
                 referencedEntityMetadata: parentClosureEntityMetadata,
                 columns: [entityMetadata.ownColumns[1]],
                 referencedColumns: parentClosureEntityMetadata.primaryColumns,
-                // onDelete: "CASCADE" // todo: does not work in mssql for some reason
+                onDelete: "CASCADE" // todo: does not work in mssql for some reason
             }),
         ];
 

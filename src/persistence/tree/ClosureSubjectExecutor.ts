@@ -2,6 +2,8 @@ import {Subject} from "../Subject";
 import {QueryRunner} from "../../query-runner/QueryRunner";
 import {ObjectLiteral} from "../../common/ObjectLiteral";
 import {CannotAttachTreeChildrenEntityError} from "../../error/CannotAttachTreeChildrenEntityError";
+import {DeleteQueryBuilder} from '../../query-builder/DeleteQueryBuilder';
+import {OrmUtils} from '../../util/OrmUtils';
 
 /**
  * Executes subject operations for closure entities.
@@ -18,18 +20,6 @@ export class ClosureSubjectExecutor {
     // -------------------------------------------------------------------------
     // Public Methods
     // -------------------------------------------------------------------------
-
-    /**
-     * Removes all children of the given subject's entity.
-
-    async deleteChildrenOf(subject: Subject) {
-        // const relationValue = subject.metadata.treeParentRelation.getEntityValue(subject.databaseEntity);
-        // console.log("relationValue: ", relationValue);
-        // this.queryRunner.manager
-        //     .createQueryBuilder()
-        //     .from(subject.metadata.closureJunctionTable.target, "tree")
-        //     .where("tree.");
-    }*/
 
     /**
      * Executes operations when subject is being inserted.
@@ -61,37 +51,177 @@ export class ClosureSubjectExecutor {
             parent = subject.parentSubject.insertedValueSet ? subject.parentSubject.insertedValueSet : subject.parentSubject.entity;
 
         if (parent) {
-            const escape = (alias: string) => this.queryRunner.connection.driver.escape(alias);
-            const tableName = this.getTableName(subject.metadata.closureJunctionTable.tablePath);
-            const ancestorColumnNames = subject.metadata.closureJunctionTable.ancestorColumns.map(column => {
-                return escape(column.databaseName);
-            });
-            const descendantColumnNames = subject.metadata.closureJunctionTable.descendantColumns.map(column => {
-                return escape(column.databaseName);
-            });
-            const firstQueryParameters: any[] = [];
-            const childEntityIdValues = subject.metadata.primaryColumns.map(column => column.getEntityValue(subject.insertedValueSet!));
-            const childEntityIds1 = subject.metadata.primaryColumns.map((column, index) => {
-                firstQueryParameters.push(childEntityIdValues[index]);
-                return this.queryRunner.connection.driver.createParameter("child_entity_" + column.databaseName, firstQueryParameters.length - 1);
-            });
-            const whereCondition = subject.metadata.primaryColumns.map(column => {
-                const columnName = escape(column.databaseName + "_descendant");
-                const parentId = column.getEntityValue(parent);
-                if (!parentId)
-                    throw new CannotAttachTreeChildrenEntityError(subject.metadata.name);
-
-                firstQueryParameters.push(parentId);
-                const parameterName = this.queryRunner.connection.driver.createParameter("parent_entity_" + column.databaseName, firstQueryParameters.length - 1);
-                return columnName + " = " + parameterName;
-            }).join(", ");
-
-            await this.queryRunner.query(
-                `INSERT INTO ${tableName} (${[...ancestorColumnNames, ...descendantColumnNames].join(", ")}) ` +
-                `SELECT ${ancestorColumnNames.join(", ")}, ${childEntityIds1.join(", ")} FROM ${tableName} WHERE ${whereCondition}`,
-                firstQueryParameters
-            );
+            await this.insertClosureEntry(subject, subject.entity, parent);
         }
+    }
+
+    /**
+     * Executes operations when subject is being updated.
+     */
+    async update(subject: Subject): Promise<void> {
+        let parent = subject.metadata.treeParentRelation!.getEntityValue(subject.entity!); // if entity was attached via parent
+        if (!parent && subject.parentSubject && subject.parentSubject.entity) // if entity was attached via children
+            parent = subject.parentSubject.entity;
+
+        let entity = subject.databaseEntity; // if entity was attached via parent
+        if (!entity) // if entity was attached via children
+            entity = subject.metadata.treeChildrenRelation!.getEntityValue(parent).find((child: any) => {
+                return Object.entries(subject.identifier!).every(([key, value]) => child[key] === value);
+            });
+
+        // Exit if the parent or the entity where never set
+        if (entity === undefined || parent === undefined) {
+            return;
+        }
+
+        const oldParent = subject.metadata.treeParentRelation!.getEntityValue(entity!);
+        const oldParentId = subject.metadata.getEntityIdMap(oldParent);
+        const parentId = subject.metadata.getEntityIdMap(parent);
+
+        // Exit if the new and old parents are the same
+        if (OrmUtils.compareIds(oldParentId, parentId)) {
+            return;
+        }
+
+        const escape = (alias: string) => this.queryRunner.connection.driver.escape(alias);
+        const previousParent = subject.metadata.treeParentRelation!.getEntityValue(entity!);
+        const hasPreviousParent = subject.metadata.primaryColumns.some(column => column.getEntityValue(previousParent) != null); //Check for null or undefined (in case the parent is undefined)
+
+        if (hasPreviousParent) {
+            const closureTable = subject.metadata.closureJunctionTable;
+
+            const ancestorColumnNames = closureTable.ancestorColumns.map(column => {
+                return escape(column.databaseName);
+            });
+
+            const descendantColumnNames = closureTable.descendantColumns.map(column => {
+                return escape(column.databaseName);
+            });
+
+            // Delete logic
+            const createSubQuery = (qb: DeleteQueryBuilder<any>, alias: string) => {
+                const subAlias = `sub${alias}`;
+
+                const subSelect = qb.createQueryBuilder()
+                    .select(descendantColumnNames.join(", "))
+                    .from(closureTable.tablePath, subAlias);
+
+                // Create where conditions e.g. (WHERE "subdescendant"."id_ancestor" = :value_id)
+                for (const column of closureTable.ancestorColumns) {
+                    subSelect.andWhere(`${escape(subAlias)}.${escape(column.databaseName)} = :value_${column.referencedColumn!.databaseName}`);
+                }
+
+                return qb.createQueryBuilder()
+                    .select(descendantColumnNames.join(", "))
+                    .from(`(${subSelect.getQuery()})`, alias)
+                    .setParameters(subSelect.getParameters())
+                    .getQuery();
+            };
+
+            const parameters: ObjectLiteral = {};
+            for (const column of subject.metadata.primaryColumns) {
+                parameters[`value_${column.databaseName}`] = entity![column.databaseName];
+            }
+
+            await this.queryRunner
+                .manager
+                .createQueryBuilder()
+                .delete()
+                .from(closureTable.tablePath)
+                .where(qb => `(${descendantColumnNames.join(", ")}) IN (${createSubQuery(qb, "descendant")})`)
+                .andWhere(qb => `(${ancestorColumnNames.join(", ")}) NOT IN (${createSubQuery(qb, "ancestor")})`)
+                .setParameters(parameters)
+                .execute();
+
+            /**
+             * Only insert new parent if it exits
+             * 
+             * This only happens if the entity becomes a root entity
+             */
+            if (parent) {
+                // Insert logic
+                const queryParams: any[] = [];
+
+                const tableName = this.getTableName(closureTable.tablePath);
+                const superAlias = escape("supertree");
+                const subAlias = escape("subtree");
+
+                const select = [
+                    ...ancestorColumnNames.map(columnName => `${superAlias}.${columnName}`),
+                    ...descendantColumnNames.map(columnName => `${subAlias}.${columnName}`)
+                ];
+
+                const entityWhereCondition = subject.metadata.primaryColumns.map(column => {
+                    const columnName = escape(`${column.databaseName}_ancestor`);
+                    const entityId = column.getEntityValue(entity!);
+
+                    queryParams.push(entityId);
+                    const parameterName = this.queryRunner.connection.driver.createParameter("entity_" + column.databaseName, queryParams.length - 1);
+                    return `${subAlias}.${columnName} = ${parameterName}`;
+                });
+
+                const parentWhereCondition = subject.metadata.primaryColumns.map(column => {
+                    const columnName = escape(`${column.databaseName}_descendant`);
+                    const parentId = column.getEntityValue(parent);
+
+                    if (!parentId)
+                        throw new CannotAttachTreeChildrenEntityError(subject.metadata.name);
+
+                    queryParams.push(parentId);
+                    const parameterName = this.queryRunner.connection.driver.createParameter("parent_entity_" + column.databaseName, queryParams.length - 1);
+                    return `${superAlias}.${columnName} = ${parameterName}`;
+                });
+
+
+                this.queryRunner.query(
+                    `INSERT INTO ${tableName} (${[...ancestorColumnNames, ...descendantColumnNames].join(", ")}) ` +
+                    `SELECT ${select.join(", ")} ` +
+                    `FROM ${tableName} AS ${superAlias}, ${tableName} AS ${subAlias} ` +
+                    `WHERE ${[...entityWhereCondition, ...parentWhereCondition].join(" AND ")}`,
+                    queryParams
+                );
+            }
+        } else {
+            await this.insertClosureEntry(subject, entity, parent);
+        }
+    }
+
+    /**
+     * Inserts the rows into the closure table for a given entity
+     */
+    private insertClosureEntry(subject: Subject, entity: any, parent: any) {
+        const escape = (alias: string) => this.queryRunner.connection.driver.escape(alias);
+        const tableName = this.getTableName(subject.metadata.closureJunctionTable.tablePath);
+        const queryParams: any[] = [];
+
+        const ancestorColumnNames = subject.metadata.closureJunctionTable.ancestorColumns.map(column => {
+            return escape(column.databaseName);
+        });
+        const descendantColumnNames = subject.metadata.closureJunctionTable.descendantColumns.map(column => {
+            return escape(column.databaseName);
+        });
+        const childEntityIds1 = subject.metadata.primaryColumns.map(column => {
+            queryParams.push(column.getEntityValue(subject.insertedValueSet ? subject.insertedValueSet : entity));
+            return this.queryRunner.connection.driver.createParameter("child_entity_" + column.databaseName, queryParams.length - 1);
+        });
+
+        const whereCondition = subject.metadata.primaryColumns.map(column => {
+            const columnName = escape(column.databaseName + "_descendant");
+            const parentId = column.getEntityValue(parent);
+
+            if (!parentId)
+                throw new CannotAttachTreeChildrenEntityError(subject.metadata.name);
+
+            queryParams.push(parentId);
+            const parameterName = this.queryRunner.connection.driver.createParameter("parent_entity_" + column.databaseName, queryParams.length - 1);
+            return `${columnName} = ${parameterName}`;
+        });
+
+        this.queryRunner.query(
+            `INSERT INTO ${tableName} (${[...ancestorColumnNames, ...descendantColumnNames].join(", ")}) ` +
+            `SELECT ${ancestorColumnNames.join(", ")}, ${childEntityIds1.join(", ")} FROM ${tableName} WHERE ${whereCondition.join(" AND ")}`,
+            queryParams
+        );
     }
 
     /**
@@ -102,11 +232,7 @@ export class ClosureSubjectExecutor {
         return tablePath.split(".")
             .map(i => {
                 // this condition need because in SQL Server driver when custom database name was specified and schema name was not, we got `dbName..tableName` string, and doesn't need to escape middle empty string
-                if (i === "")
-                    return i;
-                return this.queryRunner.connection.driver.escape(i);
+                return i === "" ? i : this.queryRunner.connection.driver.escape(i);
             }).join(".");
     }
-
-
 }
