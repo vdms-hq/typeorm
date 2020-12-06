@@ -173,7 +173,7 @@ export class ClosureSubjectExecutor {
                 });
 
 
-                this.queryRunner.query(
+                await this.queryRunner.query(
                     `INSERT INTO ${tableName} (${[...ancestorColumnNames, ...descendantColumnNames].join(", ")}) ` +
                     `SELECT ${select.join(", ")} ` +
                     `FROM ${tableName} AS ${superAlias}, ${tableName} AS ${subAlias} ` +
@@ -189,7 +189,7 @@ export class ClosureSubjectExecutor {
     /**
      * Inserts the rows into the closure table for a given entity
      */
-    private insertClosureEntry(subject: Subject, entity: any, parent: any) {
+    private async insertClosureEntry(subject: Subject, entity: any, parent: any) {
         const escape = (alias: string) => this.queryRunner.connection.driver.escape(alias);
         const tableName = this.getTableName(subject.metadata.closureJunctionTable.tablePath);
         const queryParams: any[] = [];
@@ -217,7 +217,7 @@ export class ClosureSubjectExecutor {
             return `${columnName} = ${parameterName}`;
         });
 
-        this.queryRunner.query(
+        await this.queryRunner.query(
             `INSERT INTO ${tableName} (${[...ancestorColumnNames, ...descendantColumnNames].join(", ")}) ` +
             `SELECT ${ancestorColumnNames.join(", ")}, ${childEntityIds1.join(", ")} FROM ${tableName} WHERE ${whereCondition.join(" AND ")}`,
             queryParams
