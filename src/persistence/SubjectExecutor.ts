@@ -509,9 +509,15 @@ export class SubjectExecutor {
                 await manager.delete(subjects[0].metadata.target, deleteMaps);
 
             } else {
-                // for nested set tables we execute additional queries
-                if (subjects[0].metadata.treeType === "nested-set") {
-                    await new NestedSetSubjectExecutor(this.queryRunner).remove(subjects);
+                // for tree tables we execute additional queries
+                switch (subjects[0].metadata.treeType) {
+                    case "nested-set":
+                        await new NestedSetSubjectExecutor(this.queryRunner).remove(subjects);
+                        break;
+
+                    case "closure-table":
+                        await new ClosureSubjectExecutor(this.queryRunner).remove(subjects);
+                        break;
                 }
 
                 // here we execute our deletion query

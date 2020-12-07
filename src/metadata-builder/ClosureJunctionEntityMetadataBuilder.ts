@@ -3,6 +3,7 @@ import {ColumnMetadata} from "../metadata/ColumnMetadata";
 import {ForeignKeyMetadata} from "../metadata/ForeignKeyMetadata";
 import {Connection} from "../connection/Connection";
 import {IndexMetadata} from "../metadata/IndexMetadata";
+import {SqlServerDriver} from "../driver/sqlserver/SqlServerDriver";
 
 /**
  * Creates EntityMetadata for junction tables of the closure entities.
@@ -110,21 +111,21 @@ export class ClosureJunctionEntityMetadataBuilder {
         }
 
         // create junction table foreign keys
-        // Note: There is only a single CASCADE because of mssql not supporting multi cascade paths
-        //       However this should not cause any problems since the both foreign keys point to the same column on the same table
+        // Note: CASCADE is not applied to mssql because it does not support multi cascade paths
         entityMetadata.foreignKeys = [
             new ForeignKeyMetadata({
                 entityMetadata: entityMetadata,
                 referencedEntityMetadata: parentClosureEntityMetadata,
                 columns: [entityMetadata.ownColumns[0]],
                 referencedColumns: parentClosureEntityMetadata.primaryColumns,
-                onDelete: "CASCADE"
+                onDelete: this.connection.driver instanceof SqlServerDriver ? "NO ACTION" : "CASCADE"
             }),
             new ForeignKeyMetadata({
                 entityMetadata: entityMetadata,
                 referencedEntityMetadata: parentClosureEntityMetadata,
                 columns: [entityMetadata.ownColumns[1]],
                 referencedColumns: parentClosureEntityMetadata.primaryColumns,
+                onDelete: this.connection.driver instanceof SqlServerDriver ? "NO ACTION" : "CASCADE"
             }),
         ];
 

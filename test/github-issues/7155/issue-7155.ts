@@ -1,22 +1,18 @@
 import { assert } from "chai";
 import { Connection, ObjectLiteral, TreeRepository } from "../../../src";
+import { SqlServerDriver } from "../../../src/driver/sqlserver/SqlServerDriver";
 import { NestedSetMultipleRootError } from "../../../src/error/NestedSetMultipleRootError";
 import {
     closeTestingConnections,
     createTestingConnections,
     reloadTestingDatabases
 } from "../../utils/test-utils";
-import { MultiIdMaterialized, MultiIdNested, SingleIdClosure, SingleIdMaterialized, SingleIdNested } from "./entity/TreeEntities";
+import { MultiIdMaterialized, MultiIdNested, SingleIdClosure, SingleIdMaterialized, SingleIdNested } from "./entity/RemainingTreeEntities";
+import { SqlServerMultiIdMaterialized, SqlServerMultiIdNested, SqlServerSingleIdClosure, SqlServerSingleIdMaterialized, SqlServerSingleIdNested } from "./entity/SqlServerTreeEntities";
 
 describe("github issues > #7155", () => {
     let connections: Connection[];
-    before(
-        async () =>
-            (connections = await createTestingConnections({
-                entities: [__dirname + "/entity/*{.js,.ts}"],
-                enabledDrivers: ["mysql", "postgres"]
-            }))
-    );
+    before(async () => (connections = await generateConnections()));
     beforeEach(() => reloadTestingDatabases(connections));
     after(() => closeTestingConnections(connections));
 
@@ -28,12 +24,13 @@ describe("github issues > #7155", () => {
     it("(Closure/SingleID/Save) Update without parent", () =>
         Promise.all(
             connections.map(async (connection) => {
-                const repo = connection.getTreeRepository(SingleIdClosure);
+                const Entity = getEntity(connection, "single_closure");
+                const repo = connection.getTreeRepository(Entity);
 
-                const entry1 = new SingleIdClosure();
+                const entry1 = new Entity();
                 await repo.save(entry1);
 
-                const entry2 = new SingleIdClosure();
+                const entry2 = new Entity();
                 await repo.save(entry2);
 
                 entry2.name = "entry2";
@@ -48,12 +45,13 @@ describe("github issues > #7155", () => {
     it("(Closure/SingleID/Save) Update without tree change", () =>
         Promise.all(
             connections.map(async (connection) => {
-                const repo = connection.getTreeRepository(SingleIdClosure);
+                const Entity = getEntity(connection, "single_closure");
+                const repo = connection.getTreeRepository(Entity);
 
-                const entry1 = new SingleIdClosure();
+                const entry1 = new Entity();
                 await repo.save(entry1);
 
-                const entry11 = new SingleIdClosure();
+                const entry11 = new Entity();
                 entry11.parent = entry1;
                 await repo.save(entry11);
 
@@ -69,12 +67,13 @@ describe("github issues > #7155", () => {
     it("(Closure/SingleID/Save) Set leaf entity as root", () =>
         Promise.all(
             connections.map(async (connection) => {
-                const repo = connection.getTreeRepository(SingleIdClosure);
+                const Entity = getEntity(connection, "single_closure");
+                const repo = connection.getTreeRepository(Entity);
 
-                const entry1 = new SingleIdClosure();
+                const entry1 = new Entity();
                 await repo.save(entry1);
 
-                const entry11 = new SingleIdClosure();
+                const entry11 = new Entity();
                 entry11.parent = entry1;
                 await repo.save(entry11);
 
@@ -90,15 +89,16 @@ describe("github issues > #7155", () => {
     it("(Closure/SingleID/Save) Move leaf with multi root", () =>
         Promise.all(
             connections.map(async (connection) => {
-                const repo = connection.getTreeRepository(SingleIdClosure);
+                const Entity = getEntity(connection, "single_closure");
+                const repo = connection.getTreeRepository(Entity);
 
-                const entry1 = new SingleIdClosure();
+                const entry1 = new Entity();
                 await repo.save(entry1);
 
-                const entry2 = new SingleIdClosure();
+                const entry2 = new Entity();
                 await repo.save(entry2);
 
-                const entry11 = new SingleIdClosure();
+                const entry11 = new Entity();
                 entry11.parent = entry1;
                 await repo.save(entry11);
 
@@ -115,24 +115,25 @@ describe("github issues > #7155", () => {
     it("(Closure/SingleID/Save) Move branch with single root", () =>
         Promise.all(
             connections.map(async (connection) => {
-                const repo = connection.getTreeRepository(SingleIdClosure);
+                const Entity = getEntity(connection, "single_closure");
+                const repo = connection.getTreeRepository(Entity);
 
-                const entry1 = new SingleIdClosure();
+                const entry1 = new Entity();
                 await repo.save(entry1);
 
-                const entry11 = new SingleIdClosure();
+                const entry11 = new Entity();
                 entry11.parent = entry1;
                 await repo.save(entry11);
 
-                const entry12 = new SingleIdClosure();
+                const entry12 = new Entity();
                 entry12.parent = entry1;
                 await repo.save(entry12);
 
-                const entry121 = new SingleIdClosure();
+                const entry121 = new Entity();
                 entry121.parent = entry12;
                 await repo.save(entry121);
 
-                const entry1211 = new SingleIdClosure();
+                const entry1211 = new Entity();
                 entry1211.parent = entry121;
                 await repo.save(entry1211);
 
@@ -149,24 +150,25 @@ describe("github issues > #7155", () => {
     it("(Closure/SingleID/Save) Move branch with single root via children", () =>
         Promise.all(
             connections.map(async (connection) => {
-                const repo = connection.getTreeRepository(SingleIdClosure);
+                const Entity = getEntity(connection, "single_closure");
+                const repo = connection.getTreeRepository(Entity);
 
-                const entry1 = new SingleIdClosure();
+                const entry1 = new Entity();
                 await repo.save(entry1);
 
-                const entry11 = new SingleIdClosure();
+                const entry11 = new Entity();
                 entry11.parent = entry1;
                 await repo.save(entry11);
 
-                const entry12 = new SingleIdClosure();
+                const entry12 = new Entity();
                 entry12.parent = entry1;
                 await repo.save(entry12);
 
-                const entry121 = new SingleIdClosure();
+                const entry121 = new Entity();
                 entry121.parent = entry12;
                 await repo.save(entry121);
 
-                const entry1211 = new SingleIdClosure();
+                const entry1211 = new Entity();
                 entry1211.parent = entry121;
                 await repo.save(entry1211);
 
@@ -183,28 +185,29 @@ describe("github issues > #7155", () => {
     it("(Closure/SingleID/Save) Move multiple branches with single root via children", () =>
         Promise.all(
             connections.map(async (connection) => {
-                const repo = connection.getTreeRepository(SingleIdClosure);
+                const Entity = getEntity(connection, "single_closure");
+                const repo = connection.getTreeRepository(Entity);
 
-                const entry1 = new SingleIdClosure();
+                const entry1 = new Entity();
                 await repo.save(entry1);
 
-                const entry11 = new SingleIdClosure();
+                const entry11 = new Entity();
                 entry11.parent = entry1;
                 await repo.save(entry11);
 
-                const entry111 = new SingleIdClosure();
+                const entry111 = new Entity();
                 entry111.parent = entry11;
                 await repo.save(entry111);
 
-                const entry12 = new SingleIdClosure();
+                const entry12 = new Entity();
                 entry12.parent = entry1;
                 await repo.save(entry12);
 
-                const entry121 = new SingleIdClosure();
+                const entry121 = new Entity();
                 entry121.parent = entry12;
                 await repo.save(entry121);
 
-                const entry1211 = new SingleIdClosure();
+                const entry1211 = new Entity();
                 entry1211.parent = entry121;
                 await repo.save(entry1211);
 
@@ -226,15 +229,16 @@ describe("github issues > #7155", () => {
     it("(Closure/SingleID/Remove) Remove leaf with multi root", () =>
         Promise.all(
             connections.map(async (connection) => {
-                const repo = connection.getTreeRepository(SingleIdClosure);
+                const Entity = getEntity(connection, "single_closure");
+                const repo = connection.getTreeRepository(Entity);
 
-                const entry1 = new SingleIdClosure();
+                const entry1 = new Entity();
                 await repo.save(entry1);
 
-                const entry2 = new SingleIdClosure();
+                const entry2 = new Entity();
                 await repo.save(entry2);
 
-                const entry11 = new SingleIdClosure();
+                const entry11 = new Entity();
                 entry11.parent = entry1;
                 await repo.save(entry11);
 
@@ -250,24 +254,30 @@ describe("github issues > #7155", () => {
     it("(Closure/SingleID/Remove) Remove branch with single root", () =>
         Promise.all(
             connections.map(async (connection) => {
-                const repo = connection.getTreeRepository(SingleIdClosure);
+                if (connection.driver instanceof SqlServerDriver) {
+                    // This test will not working on sql server
+                    return;
+                }
 
-                const entry1 = new SingleIdClosure();
+                const Entity = getEntity(connection, "single_closure");
+                const repo = connection.getTreeRepository(Entity);
+
+                const entry1 = new Entity();
                 await repo.save(entry1);
 
-                const entry11 = new SingleIdClosure();
+                const entry11 = new Entity();
                 entry11.parent = entry1;
                 await repo.save(entry11);
 
-                const entry12 = new SingleIdClosure();
+                const entry12 = new Entity();
                 entry12.parent = entry1;
                 await repo.save(entry12);
 
-                const entry111 = new SingleIdClosure();
+                const entry111 = new Entity();
                 entry111.parent = entry11;
                 await repo.save(entry111);
 
-                const entry1111 = new SingleIdClosure();
+                const entry1111 = new Entity();
                 entry1111.parent = entry111;
                 await repo.save(entry1111);
 
@@ -283,28 +293,34 @@ describe("github issues > #7155", () => {
     it("(Closure/SingleID/Remove) Remove multiple branches with single root", () =>
         Promise.all(
             connections.map(async (connection) => {
-                const repo = connection.getTreeRepository(SingleIdClosure);
+                if (connection.driver instanceof SqlServerDriver) {
+                    // This test will not working on sql server
+                    return;
+                }
 
-                const entry1 = new SingleIdClosure();
+                const Entity = getEntity(connection, "single_closure");
+                const repo = connection.getTreeRepository(Entity);
+
+                const entry1 = new Entity();
                 await repo.save(entry1);
 
-                const entry11 = new SingleIdClosure();
+                const entry11 = new Entity();
                 entry11.parent = entry1;
                 await repo.save(entry11);
 
-                const entry111 = new SingleIdClosure();
+                const entry111 = new Entity();
                 entry111.parent = entry11;
                 await repo.save(entry111);
 
-                const entry12 = new SingleIdClosure();
+                const entry12 = new Entity();
                 entry12.parent = entry1;
                 await repo.save(entry12);
 
-                const entry121 = new SingleIdClosure();
+                const entry121 = new Entity();
                 entry121.parent = entry12;
                 await repo.save(entry121);
 
-                const entry1211 = new SingleIdClosure();
+                const entry1211 = new Entity();
                 entry1211.parent = entry121;
                 await repo.save(entry1211);
 
@@ -333,15 +349,16 @@ describe("github issues > #7155", () => {
                     { id: 2, left: 2, right: 3 }
                 ];
 
-                const repo = connection.getTreeRepository(SingleIdNested);
+                const Entity = getEntity(connection, "single_nested");
+                const repo = connection.getTreeRepository(Entity);
                 const ids: ObjectLiteral[] = [];
                 let nestedSet: SingleIdNested;
 
-                const entry1 = new SingleIdNested();
+                const entry1 = new Entity();
                 nestedSet = await repo.save(entry1);
                 ids.push({ id: nestedSet.id });
 
-                const entry11 = new SingleIdNested();
+                const entry11 = new Entity();
                 entry11.parent = entry1;
                 nestedSet = await repo.save(entry11);
                 ids.push({ id: nestedSet.id });
@@ -361,13 +378,14 @@ describe("github issues > #7155", () => {
     it("(Nested/SingleID/Save) Set multiple root entities", () =>
         Promise.all(
             connections.map(async (connection) => {
-                const repo = connection.getTreeRepository(SingleIdNested);
+                const Entity = getEntity(connection, "single_nested");
+                const repo = connection.getTreeRepository(Entity);
 
-                const entry1 = new SingleIdNested();
+                const entry1 = new Entity();
                 await repo.save(entry1);
 
                 try {
-                    const entry2 = new SingleIdNested();
+                    const entry2 = new Entity();
                     await repo.save(entry2);
                 } catch (error) {
                     assert.instanceOf(error, NestedSetMultipleRootError);
@@ -381,12 +399,13 @@ describe("github issues > #7155", () => {
     it("(Nested/SingleID/Save) Set leaf entity as root", () =>
         Promise.all(
             connections.map(async (connection) => {
-                const repo = connection.getTreeRepository(SingleIdNested);
+                const Entity = getEntity(connection, "single_nested");
+                const repo = connection.getTreeRepository(Entity);
 
-                const entry1 = new SingleIdNested();
+                const entry1 = new Entity();
                 await repo.save(entry1);
 
-                const entry11 = new SingleIdNested();
+                const entry11 = new Entity();
                 entry11.parent = entry1;
                 await repo.save(entry11);
 
@@ -411,20 +430,21 @@ describe("github issues > #7155", () => {
                     { id: 3, left: 2, right: 5 }
                 ];
 
-                const repo = connection.getTreeRepository(SingleIdNested);
+                const Entity = getEntity(connection, "single_nested");
+                const repo = connection.getTreeRepository(Entity);
                 const ids: ObjectLiteral[] = [];
                 let nestedSet: SingleIdNested;
 
-                const entry1 = new SingleIdNested();
+                const entry1 = new Entity();
                 nestedSet = await repo.save(entry1);
                 ids.push({ id: nestedSet.id });
 
-                const entry11 = new SingleIdNested();
+                const entry11 = new Entity();
                 entry11.parent = entry1;
                 nestedSet = await repo.save(entry11);
                 ids.push({ id: nestedSet.id });
 
-                const entry12 = new SingleIdNested();
+                const entry12 = new Entity();
                 entry12.parent = entry1;
                 nestedSet = await repo.save(entry12);
                 ids.push({ id: nestedSet.id });
@@ -454,30 +474,31 @@ describe("github issues > #7155", () => {
                     { id: 5, left: 4, right: 5 }
                 ];
 
-                const repo = connection.getTreeRepository(SingleIdNested);
+                const Entity = getEntity(connection, "single_nested");
+                const repo = connection.getTreeRepository(Entity);
                 const ids: ObjectLiteral[] = [];
                 let nestedSet: SingleIdNested;
 
-                const entry1 = new SingleIdNested();
+                const entry1 = new Entity();
                 nestedSet = await repo.save(entry1);
                 ids.push({ id: nestedSet.id });
 
-                const entry11 = new SingleIdNested();
+                const entry11 = new Entity();
                 entry11.parent = entry1;
                 nestedSet = await repo.save(entry11);
                 ids.push({ id: nestedSet.id });
 
-                const entry12 = new SingleIdNested();
+                const entry12 = new Entity();
                 entry12.parent = entry1;
                 nestedSet = await repo.save(entry12);
                 ids.push({ id: nestedSet.id });
 
-                const entry121 = new SingleIdNested();
+                const entry121 = new Entity();
                 entry121.parent = entry12;
                 nestedSet = await repo.save(entry121);
                 ids.push({ id: nestedSet.id });
 
-                const entry1211 = new SingleIdNested();
+                const entry1211 = new Entity();
                 entry1211.parent = entry121;
                 nestedSet = await repo.save(entry1211);
                 ids.push({ id: nestedSet.id });
@@ -507,30 +528,31 @@ describe("github issues > #7155", () => {
                     { id: 5, left: 4, right: 5 }
                 ];
 
-                const repo = connection.getTreeRepository(SingleIdNested);
+                const Entity = getEntity(connection, "single_nested");
+                const repo = connection.getTreeRepository(Entity);
                 const ids: ObjectLiteral[] = [];
                 let nestedSet: SingleIdNested;
 
-                const entry1 = new SingleIdNested();
+                const entry1 = new Entity();
                 nestedSet = await repo.save(entry1);
                 ids.push({ id: nestedSet.id });
 
-                const entry11 = new SingleIdNested();
+                const entry11 = new Entity();
                 entry11.parent = entry1;
                 nestedSet = await repo.save(entry11);
                 ids.push({ id: nestedSet.id });
 
-                const entry12 = new SingleIdNested();
+                const entry12 = new Entity();
                 entry12.parent = entry1;
                 nestedSet = await repo.save(entry12);
                 ids.push({ id: nestedSet.id });
 
-                const entry121 = new SingleIdNested();
+                const entry121 = new Entity();
                 entry121.parent = entry12;
                 nestedSet = await repo.save(entry121);
                 ids.push({ id: nestedSet.id });
 
-                const entry1211 = new SingleIdNested();
+                const entry1211 = new Entity();
                 entry1211.parent = entry121;
                 nestedSet = await repo.save(entry1211);
                 ids.push({ id: nestedSet.id });
@@ -561,35 +583,36 @@ describe("github issues > #7155", () => {
                     { id: 6, left: 4, right: 5 }
                 ];
 
-                const repo = connection.getTreeRepository(SingleIdNested);
+                const Entity = getEntity(connection, "single_nested");
+                const repo = connection.getTreeRepository(Entity);
                 const ids: ObjectLiteral[] = [];
                 let nestedSet: SingleIdNested;
 
-                const entry1 = new SingleIdNested();
+                const entry1 = new Entity();
                 nestedSet = await repo.save(entry1);
                 ids.push({ id: nestedSet.id });
 
-                const entry11 = new SingleIdNested();
+                const entry11 = new Entity();
                 entry11.parent = entry1;
                 nestedSet = await repo.save(entry11);
                 ids.push({ id: nestedSet.id });
 
-                const entry111 = new SingleIdNested();
+                const entry111 = new Entity();
                 entry111.parent = entry11;
                 nestedSet = await repo.save(entry111);
                 ids.push({ id: nestedSet.id });
 
-                const entry12 = new SingleIdNested();
+                const entry12 = new Entity();
                 entry12.parent = entry1;
                 nestedSet = await repo.save(entry12);
                 ids.push({ id: nestedSet.id });
 
-                const entry121 = new SingleIdNested();
+                const entry121 = new Entity();
                 entry121.parent = entry12;
                 nestedSet = await repo.save(entry121);
                 ids.push({ id: nestedSet.id });
 
-                const entry1211 = new SingleIdNested();
+                const entry1211 = new Entity();
                 entry1211.parent = entry121;
                 nestedSet = await repo.save(entry1211);
                 ids.push({ id: nestedSet.id });
@@ -620,15 +643,16 @@ describe("github issues > #7155", () => {
                     { id: 1, left: 1, right: 2 },
                 ];
 
-                const repo = connection.getTreeRepository(SingleIdNested);
+                const Entity = getEntity(connection, "single_nested");
+                const repo = connection.getTreeRepository(Entity);
                 const ids: ObjectLiteral[] = [];
                 let nestedSet: SingleIdNested;
 
-                const entry1 = new SingleIdNested();
+                const entry1 = new Entity();
                 nestedSet = await repo.save(entry1);
                 ids.push({ id: nestedSet.id });
 
-                const entry11 = new SingleIdNested();
+                const entry11 = new Entity();
                 entry11.parent = entry1;
                 nestedSet = await repo.save(entry11);
                 ids.push({ id: nestedSet.id });
@@ -649,36 +673,42 @@ describe("github issues > #7155", () => {
     it("(Nested/SingleID/Remove) Remove branch with single root", () =>
         Promise.all(
             connections.map(async (connection) => {
+                if (connection.driver instanceof SqlServerDriver) {
+                    // This test will not working on sql server
+                    return;
+                }
+
                 const expectedResults = [
                     { id: 1, left: 1, right: 6 },
                     { id: 2, left: 2, right: 3 },
                     { id: 3, left: 4, right: 5 }
                 ];
 
-                const repo = connection.getTreeRepository(SingleIdNested);
+                const Entity = getEntity(connection, "single_nested");
+                const repo = connection.getTreeRepository(Entity);
                 const ids: ObjectLiteral[] = [];
                 let nestedSet: SingleIdNested;
 
-                const entry1 = new SingleIdNested();
+                const entry1 = new Entity();
                 nestedSet = await repo.save(entry1);
                 ids.push({ id: nestedSet.id });
 
-                const entry11 = new SingleIdNested();
+                const entry11 = new Entity();
                 entry11.parent = entry1;
                 nestedSet = await repo.save(entry11);
                 ids.push({ id: nestedSet.id });
 
-                const entry12 = new SingleIdNested();
+                const entry12 = new Entity();
                 entry12.parent = entry1;
                 nestedSet = await repo.save(entry12);
                 ids.push({ id: nestedSet.id });
 
-                const entry111 = new SingleIdNested();
+                const entry111 = new Entity();
                 entry111.parent = entry11;
                 nestedSet = await repo.save(entry111);
                 ids.push({ id: nestedSet.id });
 
-                const entry1111 = new SingleIdNested();
+                const entry1111 = new Entity();
                 entry1111.parent = entry111;
                 nestedSet = await repo.save(entry1111);
                 ids.push({ id: nestedSet.id });
@@ -699,41 +729,47 @@ describe("github issues > #7155", () => {
     it("(Nested/SingleID/Remove) Remove multiple branches with single root", () =>
         Promise.all(
             connections.map(async (connection) => {
+                if (connection.driver instanceof SqlServerDriver) {
+                    // This test will not working on sql server
+                    return;
+                }
+
                 const expectedResults = [
                     { id: 1, left: 1, right: 6 },
                     { id: 4, left: 2, right: 5 },
                     { id: 5, left: 3, right: 4 }
                 ];
 
-                const repo = connection.getTreeRepository(SingleIdNested);
+                const Entity = getEntity(connection, "single_nested");
+                const repo = connection.getTreeRepository(Entity);
                 const ids: ObjectLiteral[] = [];
                 let nestedSet: SingleIdNested;
 
-                const entry1 = new SingleIdNested();
+                const entry1 = new Entity();
                 nestedSet = await repo.save(entry1);
                 ids.push({ id: nestedSet.id });
 
-                const entry11 = new SingleIdNested();
+                const entry11 = new Entity();
                 entry11.parent = entry1;
                 nestedSet = await repo.save(entry11);
                 ids.push({ id: nestedSet.id });
 
-                const entry111 = new SingleIdNested();
+                const entry111 = new Entity();
                 entry111.parent = entry11;
                 nestedSet = await repo.save(entry111);
                 ids.push({ id: nestedSet.id });
 
-                const entry12 = new SingleIdNested();
+                const entry12 = new Entity();
                 entry12.parent = entry1;
                 nestedSet = await repo.save(entry12);
                 ids.push({ id: nestedSet.id });
 
-                const entry121 = new SingleIdNested();
+                const entry121 = new Entity();
                 entry121.parent = entry12;
                 nestedSet = await repo.save(entry121);
                 ids.push({ id: nestedSet.id });
 
-                const entry1211 = new SingleIdNested();
+                const entry1211 = new Entity();
                 entry1211.parent = entry121;
                 nestedSet = await repo.save(entry1211);
                 ids.push({ id: nestedSet.id });
@@ -762,12 +798,13 @@ describe("github issues > #7155", () => {
     it("(Materialized/SingleID/Save) Update without parent", () =>
         Promise.all(
             connections.map(async (connection) => {
-                const repo = connection.getTreeRepository(SingleIdMaterialized);
+                const Entity = getEntity(connection, "single_materialized");
+                const repo = connection.getTreeRepository(Entity);
 
-                const entry1 = new SingleIdMaterialized();
+                const entry1 = new Entity();
                 await repo.save(entry1);
 
-                const entry2 = new SingleIdMaterialized();
+                const entry2 = new Entity();
                 await repo.save(entry2);
 
                 entry2.name = "entry2";
@@ -782,12 +819,13 @@ describe("github issues > #7155", () => {
     it("(Materialized/SingleID/Save) Update without tree change", () =>
         Promise.all(
             connections.map(async (connection) => {
-                const repo = connection.getTreeRepository(SingleIdMaterialized);
+                const Entity = getEntity(connection, "single_materialized");
+                const repo = connection.getTreeRepository(Entity);
 
-                const entry1 = new SingleIdMaterialized();
+                const entry1 = new Entity();
                 await repo.save(entry1);
 
-                const entry11 = new SingleIdMaterialized();
+                const entry11 = new Entity();
                 entry11.parent = entry1;
                 await repo.save(entry11);
 
@@ -803,12 +841,13 @@ describe("github issues > #7155", () => {
     it("(Materialized/SingleID/Save) Set leaf entity as root", () =>
         Promise.all(
             connections.map(async (connection) => {
-                const repo = connection.getTreeRepository(SingleIdMaterialized);
+                const Entity = getEntity(connection, "single_materialized");
+                const repo = connection.getTreeRepository(Entity);
 
-                const entry1 = new SingleIdMaterialized();
+                const entry1 = new Entity();
                 await repo.save(entry1);
 
-                const entry11 = new SingleIdMaterialized();
+                const entry11 = new Entity();
                 entry11.parent = entry1;
                 await repo.save(entry11);
 
@@ -824,15 +863,16 @@ describe("github issues > #7155", () => {
     it("(Materialized/SingleID/Save) Move leaf with multi root", () =>
         Promise.all(
             connections.map(async (connection) => {
-                const repo = connection.getTreeRepository(SingleIdMaterialized);
+                const Entity = getEntity(connection, "single_materialized");
+                const repo = connection.getTreeRepository(Entity);
 
-                const entry1 = new SingleIdMaterialized();
+                const entry1 = new Entity();
                 await repo.save(entry1);
 
-                const entry2 = new SingleIdMaterialized();
+                const entry2 = new Entity();
                 await repo.save(entry2);
 
-                const entry11 = new SingleIdMaterialized();
+                const entry11 = new Entity();
                 entry11.parent = entry1;
                 await repo.save(entry11);
 
@@ -849,24 +889,25 @@ describe("github issues > #7155", () => {
     it("(Materialized/SingleID/Save) Move branch with single root", () =>
         Promise.all(
             connections.map(async (connection) => {
-                const repo = connection.getTreeRepository(SingleIdMaterialized);
+                const Entity = getEntity(connection, "single_materialized");
+                const repo = connection.getTreeRepository(Entity);
 
-                const entry1 = new SingleIdMaterialized();
+                const entry1 = new Entity();
                 await repo.save(entry1);
 
-                const entry11 = new SingleIdMaterialized();
+                const entry11 = new Entity();
                 entry11.parent = entry1;
                 await repo.save(entry11);
 
-                const entry12 = new SingleIdMaterialized();
+                const entry12 = new Entity();
                 entry12.parent = entry1;
                 await repo.save(entry12);
 
-                const entry121 = new SingleIdMaterialized();
+                const entry121 = new Entity();
                 entry121.parent = entry12;
                 await repo.save(entry121);
 
-                const entry1211 = new SingleIdMaterialized();
+                const entry1211 = new Entity();
                 entry1211.parent = entry121;
                 await repo.save(entry1211);
 
@@ -883,24 +924,25 @@ describe("github issues > #7155", () => {
     it("(Materialized/SingleID/Save) Move branch with single root via children", () =>
         Promise.all(
             connections.map(async (connection) => {
-                const repo = connection.getTreeRepository(SingleIdMaterialized);
+                const Entity = getEntity(connection, "single_materialized");
+                const repo = connection.getTreeRepository(Entity);
 
-                const entry1 = new SingleIdMaterialized();
+                const entry1 = new Entity();
                 await repo.save(entry1);
 
-                const entry11 = new SingleIdMaterialized();
+                const entry11 = new Entity();
                 entry11.parent = entry1;
                 await repo.save(entry11);
 
-                const entry12 = new SingleIdMaterialized();
+                const entry12 = new Entity();
                 entry12.parent = entry1;
                 await repo.save(entry12);
 
-                const entry121 = new SingleIdMaterialized();
+                const entry121 = new Entity();
                 entry121.parent = entry12;
                 await repo.save(entry121);
 
-                const entry1211 = new SingleIdMaterialized();
+                const entry1211 = new Entity();
                 entry1211.parent = entry121;
                 await repo.save(entry1211);
 
@@ -917,28 +959,29 @@ describe("github issues > #7155", () => {
     it("(Materialized/SingleID/Save) Move multiple branches with single root via children", () =>
         Promise.all(
             connections.map(async (connection) => {
-                const repo = connection.getTreeRepository(SingleIdMaterialized);
+                const Entity = getEntity(connection, "single_materialized");
+                const repo = connection.getTreeRepository(Entity);
 
-                const entry1 = new SingleIdMaterialized();
+                const entry1 = new Entity();
                 await repo.save(entry1);
 
-                const entry11 = new SingleIdMaterialized();
+                const entry11 = new Entity();
                 entry11.parent = entry1;
                 await repo.save(entry11);
 
-                const entry111 = new SingleIdMaterialized();
+                const entry111 = new Entity();
                 entry111.parent = entry11;
                 await repo.save(entry111);
 
-                const entry12 = new SingleIdMaterialized();
+                const entry12 = new Entity();
                 entry12.parent = entry1;
                 await repo.save(entry12);
 
-                const entry121 = new SingleIdMaterialized();
+                const entry121 = new Entity();
                 entry121.parent = entry12;
                 await repo.save(entry121);
 
-                const entry1211 = new SingleIdMaterialized();
+                const entry1211 = new Entity();
                 entry1211.parent = entry121;
                 await repo.save(entry1211);
 
@@ -960,15 +1003,16 @@ describe("github issues > #7155", () => {
     it("(Materialized/SingleID/Remove) Remove leaf with multi root", () =>
         Promise.all(
             connections.map(async (connection) => {
-                const repo = connection.getTreeRepository(SingleIdMaterialized);
+                const Entity = getEntity(connection, "single_materialized");
+                const repo = connection.getTreeRepository(Entity);
 
-                const entry1 = new SingleIdMaterialized();
+                const entry1 = new Entity();
                 await repo.save(entry1);
 
-                const entry2 = new SingleIdMaterialized();
+                const entry2 = new Entity();
                 await repo.save(entry2);
 
-                const entry11 = new SingleIdMaterialized();
+                const entry11 = new Entity();
                 entry11.parent = entry1;
                 await repo.save(entry11);
 
@@ -984,24 +1028,30 @@ describe("github issues > #7155", () => {
     it("(Materialized/SingleID/Remove) Remove branch with single root", () =>
         Promise.all(
             connections.map(async (connection) => {
-                const repo = connection.getTreeRepository(SingleIdMaterialized);
+                if (connection.driver instanceof SqlServerDriver) {
+                    // This test will not working on sql server
+                    return;
+                }
 
-                const entry1 = new SingleIdMaterialized();
+                const Entity = getEntity(connection, "single_materialized");
+                const repo = connection.getTreeRepository(Entity);
+
+                const entry1 = new Entity();
                 await repo.save(entry1);
 
-                const entry11 = new SingleIdMaterialized();
+                const entry11 = new Entity();
                 entry11.parent = entry1;
                 await repo.save(entry11);
 
-                const entry12 = new SingleIdMaterialized();
+                const entry12 = new Entity();
                 entry12.parent = entry1;
                 await repo.save(entry12);
 
-                const entry111 = new SingleIdMaterialized();
+                const entry111 = new Entity();
                 entry111.parent = entry11;
                 await repo.save(entry111);
 
-                const entry1111 = new SingleIdMaterialized();
+                const entry1111 = new Entity();
                 entry1111.parent = entry111;
                 await repo.save(entry1111);
 
@@ -1017,28 +1067,34 @@ describe("github issues > #7155", () => {
     it("(Materialized/SingleID/Remove) Remove multiple branches with single root", () =>
         Promise.all(
             connections.map(async (connection) => {
-                const repo = connection.getTreeRepository(SingleIdMaterialized);
+                if (connection.driver instanceof SqlServerDriver) {
+                    // This test will not working on sql server
+                    return;
+                }
 
-                const entry1 = new SingleIdMaterialized();
+                const Entity = getEntity(connection, "single_materialized");
+                const repo = connection.getTreeRepository(Entity);
+
+                const entry1 = new Entity();
                 await repo.save(entry1);
 
-                const entry11 = new SingleIdMaterialized();
+                const entry11 = new Entity();
                 entry11.parent = entry1;
                 await repo.save(entry11);
 
-                const entry111 = new SingleIdMaterialized();
+                const entry111 = new Entity();
                 entry111.parent = entry11;
                 await repo.save(entry111);
 
-                const entry12 = new SingleIdMaterialized();
+                const entry12 = new Entity();
                 entry12.parent = entry1;
                 await repo.save(entry12);
 
-                const entry121 = new SingleIdMaterialized();
+                const entry121 = new Entity();
                 entry121.parent = entry12;
                 await repo.save(entry121);
 
-                const entry1211 = new SingleIdMaterialized();
+                const entry1211 = new Entity();
                 entry1211.parent = entry121;
                 await repo.save(entry1211);
 
@@ -1069,17 +1125,18 @@ describe("github issues > #7155", () => {
                     { column: "A", row: 2, left: 2, right: 3 },
                 ];
 
-                const repo = connection.getTreeRepository(MultiIdNested);
+                const Entity = getEntity(connection, "multi_nested");
+                const repo = connection.getTreeRepository(Entity);
                 const ids: ObjectLiteral[] = [];
                 let nestedSet: MultiIdNested;
 
-                const entry1 = new MultiIdNested();
+                const entry1 = new Entity();
                 entry1.column = "A";
                 entry1.row = 1;
                 nestedSet = await repo.save(entry1);
                 ids.push({ column: nestedSet.column, row: nestedSet.row });
 
-                const entry11 = new MultiIdNested();
+                const entry11 = new Entity();
                 entry11.column = "A";
                 entry11.row = 2;
                 entry11.parent = entry1;
@@ -1102,15 +1159,16 @@ describe("github issues > #7155", () => {
     it("(Nested/MultiID/Save) Set multiple root entities", () =>
         Promise.all(
             connections.map(async (connection) => {
-                const repo = connection.getTreeRepository(MultiIdNested);
+                const Entity = getEntity(connection, "multi_nested");
+                const repo = connection.getTreeRepository(Entity);
 
-                const entry1 = new MultiIdNested();
+                const entry1 = new Entity();
                 entry1.column = "A";
                 entry1.row = 1;
                 await repo.save(entry1);
 
                 try {
-                    const entry2 = new MultiIdNested();
+                    const entry2 = new Entity();
                     entry2.column = "B";
                     entry2.row = 1;
                     await repo.save(entry2);
@@ -1126,14 +1184,15 @@ describe("github issues > #7155", () => {
     it("(Nested/MultiID/Save) Set leaf entity as root", () =>
         Promise.all(
             connections.map(async (connection) => {
-                const repo = connection.getTreeRepository(MultiIdNested);
+                const Entity = getEntity(connection, "multi_nested");
+                const repo = connection.getTreeRepository(Entity);
 
-                const entry1 = new MultiIdNested();
+                const entry1 = new Entity();
                 entry1.column = "A";
                 entry1.row = 1;
                 await repo.save(entry1);
 
-                const entry11 = new MultiIdNested();
+                const entry11 = new Entity();
                 entry11.column = "A";
                 entry11.row = 2;
                 entry11.parent = entry1;
@@ -1160,24 +1219,25 @@ describe("github issues > #7155", () => {
                     { column: "A", row: 3, left: 2, right: 5 }
                 ];
 
-                const repo = connection.getTreeRepository(MultiIdNested);
+                const Entity = getEntity(connection, "multi_nested");
+                const repo = connection.getTreeRepository(Entity);
                 const ids: ObjectLiteral[] = [];
                 let nestedSet: MultiIdNested;
 
-                const entry1 = new MultiIdNested();
+                const entry1 = new Entity();
                 entry1.column = "A";
                 entry1.row = 1;
                 nestedSet = await repo.save(entry1);
                 ids.push({ column: nestedSet.column, row: nestedSet.row });
 
-                const entry11 = new MultiIdNested();
+                const entry11 = new Entity();
                 entry11.column = "A";
                 entry11.row = 2;
                 entry11.parent = entry1;
                 nestedSet = await repo.save(entry11);
                 ids.push({ column: nestedSet.column, row: nestedSet.row });
 
-                const entry12 = new MultiIdNested();
+                const entry12 = new Entity();
                 entry12.column = "A";
                 entry12.row = 3;
                 entry12.parent = entry1;
@@ -1209,38 +1269,39 @@ describe("github issues > #7155", () => {
                     { column: "C", row: 3, left: 4, right: 5 }
                 ];
 
-                const repo = connection.getTreeRepository(MultiIdNested);
+                const Entity = getEntity(connection, "multi_nested");
+                const repo = connection.getTreeRepository(Entity);
                 const ids: ObjectLiteral[] = [];
                 let nestedSet: MultiIdNested;
 
-                const entry1 = new MultiIdNested();
+                const entry1 = new Entity();
                 entry1.column = "A";
                 entry1.row = 1;
                 nestedSet = await repo.save(entry1);
                 ids.push({ column: nestedSet.column, row: nestedSet.row });
 
-                const entry11 = new MultiIdNested();
+                const entry11 = new Entity();
                 entry11.column = "A";
                 entry11.row = 2;
                 entry11.parent = entry1;
                 nestedSet = await repo.save(entry11);
                 ids.push({ column: nestedSet.column, row: nestedSet.row });
 
-                const entry12 = new MultiIdNested();
+                const entry12 = new Entity();
                 entry12.column = "A";
                 entry12.row = 3;
                 entry12.parent = entry1;
                 nestedSet = await repo.save(entry12);
                 ids.push({ column: nestedSet.column, row: nestedSet.row });
 
-                const entry121 = new MultiIdNested();
+                const entry121 = new Entity();
                 entry121.column = "B";
                 entry121.row = 3;
                 entry121.parent = entry12;
                 nestedSet = await repo.save(entry121);
                 ids.push({ column: nestedSet.column, row: nestedSet.row });
 
-                const entry1211 = new MultiIdNested();
+                const entry1211 = new Entity();
                 entry1211.column = "C";
                 entry1211.row = 3;
                 entry1211.parent = entry121;
@@ -1272,38 +1333,39 @@ describe("github issues > #7155", () => {
                     { column: "C", row: 3, left: 4, right: 5 }
                 ];
 
-                const repo = connection.getTreeRepository(MultiIdNested);
+                const Entity = getEntity(connection, "multi_nested");
+                const repo = connection.getTreeRepository(Entity);
                 const ids: ObjectLiteral[] = [];
                 let nestedSet: MultiIdNested;
 
-                const entry1 = new MultiIdNested();
+                const entry1 = new Entity();
                 entry1.column = "A";
                 entry1.row = 1;
                 nestedSet = await repo.save(entry1);
                 ids.push({ column: nestedSet.column, row: nestedSet.row });
 
-                const entry11 = new MultiIdNested();
+                const entry11 = new Entity();
                 entry11.column = "A";
                 entry11.row = 2;
                 entry11.parent = entry1;
                 nestedSet = await repo.save(entry11);
                 ids.push({ column: nestedSet.column, row: nestedSet.row });
 
-                const entry12 = new MultiIdNested();
+                const entry12 = new Entity();
                 entry12.column = "A";
                 entry12.row = 3;
                 entry12.parent = entry1;
                 nestedSet = await repo.save(entry12);
                 ids.push({ column: nestedSet.column, row: nestedSet.row });
 
-                const entry121 = new MultiIdNested();
+                const entry121 = new Entity();
                 entry121.column = "B";
                 entry121.row = 3;
                 entry121.parent = entry12;
                 nestedSet = await repo.save(entry121);
                 ids.push({ column: nestedSet.column, row: nestedSet.row });
 
-                const entry1211 = new MultiIdNested();
+                const entry1211 = new Entity();
                 entry1211.column = "C";
                 entry1211.row = 3;
                 entry1211.parent = entry121;
@@ -1336,45 +1398,46 @@ describe("github issues > #7155", () => {
                     { column: "C", row: 3, left: 4, right: 5 }
                 ];
 
-                const repo = connection.getTreeRepository(MultiIdNested);
+                const Entity = getEntity(connection, "multi_nested");
+                const repo = connection.getTreeRepository(Entity);
                 const ids: ObjectLiteral[] = [];
                 let nestedSet: MultiIdNested;
 
-                const entry1 = new MultiIdNested();
+                const entry1 = new Entity();
                 entry1.column = "A";
                 entry1.row = 1;
                 nestedSet = await repo.save(entry1);
                 ids.push({ column: nestedSet.column, row: nestedSet.row });
 
-                const entry11 = new MultiIdNested();
+                const entry11 = new Entity();
                 entry11.parent = entry1;
                 entry11.column = "A";
                 entry11.row = 2;
                 nestedSet = await repo.save(entry11);
                 ids.push({ column: nestedSet.column, row: nestedSet.row });
 
-                const entry111 = new MultiIdNested();
+                const entry111 = new Entity();
                 entry111.column = "B";
                 entry111.row = 2;
                 entry111.parent = entry11;
                 nestedSet = await repo.save(entry111);
                 ids.push({ column: nestedSet.column, row: nestedSet.row });
 
-                const entry12 = new MultiIdNested();
+                const entry12 = new Entity();
                 entry12.column = "A";
                 entry12.row = 3;
                 entry12.parent = entry1;
                 nestedSet = await repo.save(entry12);
                 ids.push({ column: nestedSet.column, row: nestedSet.row });
 
-                const entry121 = new MultiIdNested();
+                const entry121 = new Entity();
                 entry121.column = "B";
                 entry121.row = 3;
                 entry121.parent = entry12;
                 nestedSet = await repo.save(entry121);
                 ids.push({ column: nestedSet.column, row: nestedSet.row });
 
-                const entry1211 = new MultiIdNested();
+                const entry1211 = new Entity();
                 entry1211.column = "C";
                 entry1211.row = 3;
                 entry1211.parent = entry121;
@@ -1407,17 +1470,18 @@ describe("github issues > #7155", () => {
                     { column: "A", row: 1, left: 1, right: 2 }
                 ];
 
-                const repo = connection.getTreeRepository(MultiIdNested);
+                const Entity = getEntity(connection, "multi_nested");
+                const repo = connection.getTreeRepository(Entity);
                 const ids: ObjectLiteral[] = [];
                 let nestedSet: MultiIdNested;
 
-                const entry1 = new MultiIdNested();
+                const entry1 = new Entity();
                 entry1.column = "A";
                 entry1.row = 1;
                 nestedSet = await repo.save(entry1);
                 ids.push({ column: nestedSet.column, row: nestedSet.row });
 
-                const entry11 = new MultiIdNested();
+                const entry11 = new Entity();
                 entry11.column = "A";
                 entry11.row = 2;
                 entry11.parent = entry1;
@@ -1440,44 +1504,50 @@ describe("github issues > #7155", () => {
     it("(Nested/MultiID/Remove) Remove branch with single root", () =>
         Promise.all(
             connections.map(async (connection) => {
+                if (connection.driver instanceof SqlServerDriver) {
+                    // This test will not working on sql server
+                    return;
+                }
+
                 const expectedResults = [
                     { column: "A", row: 1, left: 1, right: 6 },
                     { column: "A", row: 2, left: 2, right: 3 },
                     { column: "A", row: 3, left: 4, right: 5 }
                 ];
 
-                const repo = connection.getTreeRepository(MultiIdNested);
+                const Entity = getEntity(connection, "multi_nested");
+                const repo = connection.getTreeRepository(Entity);
                 const ids: ObjectLiteral[] = [];
                 let nestedSet: MultiIdNested;
 
-                const entry1 = new MultiIdNested();
+                const entry1 = new Entity();
                 entry1.column = "A";
                 entry1.row = 1;
                 nestedSet = await repo.save(entry1);
                 ids.push({ column: nestedSet.column, row: nestedSet.row });
 
-                const entry11 = new MultiIdNested();
+                const entry11 = new Entity();
                 entry11.column = "A";
                 entry11.row = 2;
                 entry11.parent = entry1;
                 nestedSet = await repo.save(entry11);
                 ids.push({ column: nestedSet.column, row: nestedSet.row });
 
-                const entry12 = new MultiIdNested();
+                const entry12 = new Entity();
                 entry12.column = "A";
                 entry12.row = 3;
                 entry12.parent = entry1;
                 nestedSet = await repo.save(entry12);
                 ids.push({ column: nestedSet.column, row: nestedSet.row });
 
-                const entry111 = new MultiIdNested();
+                const entry111 = new Entity();
                 entry111.column = "B";
                 entry111.row = 2;
                 entry111.parent = entry11;
                 nestedSet = await repo.save(entry111);
                 ids.push({ column: nestedSet.column, row: nestedSet.row });
 
-                const entry1111 = new MultiIdNested();
+                const entry1111 = new Entity();
                 entry1111.column = "C";
                 entry1111.row = 2;
                 entry1111.parent = entry111;
@@ -1500,51 +1570,57 @@ describe("github issues > #7155", () => {
     it("(Nested/MultiID/Remove) Remove multiple branches with single root", () =>
         Promise.all(
             connections.map(async (connection) => {
+                if (connection.driver instanceof SqlServerDriver) {
+                    // This test will not working on sql server
+                    return;
+                }
+
                 const expectedResults = [
                     { column: "A", row: 1, left: 1, right: 6 },
                     { column: "A", row: 3, left: 2, right: 5 },
                     { column: "B", row: 3, left: 3, right: 4 }
                 ];
 
-                const repo = connection.getTreeRepository(MultiIdNested);
+                const Entity = getEntity(connection, "multi_nested");
+                const repo = connection.getTreeRepository(Entity);
                 const ids: ObjectLiteral[] = [];
                 let nestedSet: MultiIdNested;
 
-                const entry1 = new MultiIdNested();
+                const entry1 = new Entity();
                 entry1.column = "A";
                 entry1.row = 1;
                 nestedSet = await repo.save(entry1);
                 ids.push({ column: nestedSet.column, row: nestedSet.row });
 
-                const entry11 = new MultiIdNested();
+                const entry11 = new Entity();
                 entry11.column = "A";
                 entry11.row = 2;
                 entry11.parent = entry1;
                 nestedSet = await repo.save(entry11);
                 ids.push({ column: nestedSet.column, row: nestedSet.row });
 
-                const entry111 = new MultiIdNested();
+                const entry111 = new Entity();
                 entry111.column = "B";
                 entry111.row = 2;
                 entry111.parent = entry11;
                 nestedSet = await repo.save(entry111);
                 ids.push({ column: nestedSet.column, row: nestedSet.row });
 
-                const entry12 = new MultiIdNested();
+                const entry12 = new Entity();
                 entry12.column = "A";
                 entry12.row = 3;
                 entry12.parent = entry1;
                 nestedSet = await repo.save(entry12);
                 ids.push({ column: nestedSet.column, row: nestedSet.row });
 
-                const entry121 = new MultiIdNested();
+                const entry121 = new Entity();
                 entry121.column = "B";
                 entry121.row = 3;
                 entry121.parent = entry12;
                 nestedSet = await repo.save(entry121);
                 ids.push({ column: nestedSet.column, row: nestedSet.row });
 
-                const entry1211 = new MultiIdNested();
+                const entry1211 = new Entity();
                 entry1211.column = "C";
                 entry1211.row = 3;
                 entry1211.parent = entry121;
@@ -1575,14 +1651,15 @@ describe("github issues > #7155", () => {
     it("(Materialized/MultiID/Save) Update without parent", () =>
         Promise.all(
             connections.map(async (connection) => {
-                const repo = connection.getTreeRepository(MultiIdMaterialized);
+                const Entity = getEntity(connection, "multi_materialized");
+                const repo = connection.getTreeRepository(Entity);
 
-                const entry1 = new MultiIdMaterialized();
+                const entry1 = new Entity();
                 entry1.column = "A";
                 entry1.row = 1;
                 await repo.save(entry1);
 
-                const entry2 = new MultiIdMaterialized();
+                const entry2 = new Entity();
                 entry2.column = "B";
                 entry2.row = 1;
                 await repo.save(entry2);
@@ -1599,14 +1676,15 @@ describe("github issues > #7155", () => {
     it("(Materialized/MultiID/Save) Update without tree change", () =>
         Promise.all(
             connections.map(async (connection) => {
-                const repo = connection.getTreeRepository(MultiIdMaterialized);
+                const Entity = getEntity(connection, "multi_materialized");
+                const repo = connection.getTreeRepository(Entity);
 
-                const entry1 = new MultiIdMaterialized();
+                const entry1 = new Entity();
                 entry1.column = "A";
                 entry1.row = 1;
                 await repo.save(entry1);
 
-                const entry11 = new MultiIdMaterialized();
+                const entry11 = new Entity();
                 entry11.column = "A";
                 entry11.row = 2;
                 entry11.parent = entry1;
@@ -1624,14 +1702,15 @@ describe("github issues > #7155", () => {
     it("(Materialized/MultiID/Save) Set leaf entity as root", () =>
         Promise.all(
             connections.map(async (connection) => {
-                const repo = connection.getTreeRepository(MultiIdMaterialized);
+                const Entity = getEntity(connection, "multi_materialized");
+                const repo = connection.getTreeRepository(Entity);
 
-                const entry1 = new MultiIdMaterialized();
+                const entry1 = new Entity();
                 entry1.column = "A";
                 entry1.row = 1;
                 await repo.save(entry1);
 
-                const entry11 = new MultiIdMaterialized();
+                const entry11 = new Entity();
                 entry11.column = "A";
                 entry11.row = 2;
                 entry11.parent = entry1;
@@ -1649,19 +1728,20 @@ describe("github issues > #7155", () => {
     it("(Materialized/MultiID/Save) Move leaf with multi root", () =>
         Promise.all(
             connections.map(async (connection) => {
-                const repo = connection.getTreeRepository(MultiIdMaterialized);
+                const Entity = getEntity(connection, "multi_materialized");
+                const repo = connection.getTreeRepository(Entity);
 
-                const entry1 = new MultiIdMaterialized();
+                const entry1 = new Entity();
                 entry1.column = "A";
                 entry1.row = 1;
                 await repo.save(entry1);
 
-                const entry2 = new MultiIdMaterialized();
+                const entry2 = new Entity();
                 entry2.column = "A";
                 entry2.row = 2;
                 await repo.save(entry2);
 
-                const entry11 = new MultiIdMaterialized();
+                const entry11 = new Entity();
                 entry11.column = "B";
                 entry11.row = 1;
                 entry11.parent = entry1;
@@ -1680,32 +1760,33 @@ describe("github issues > #7155", () => {
     it("(Materialized/MultiID/Save) Move branch with single root", () =>
         Promise.all(
             connections.map(async (connection) => {
-                const repo = connection.getTreeRepository(MultiIdMaterialized);
+                const Entity = getEntity(connection, "multi_materialized");
+                const repo = connection.getTreeRepository(Entity);
 
-                const entry1 = new MultiIdMaterialized();
+                const entry1 = new Entity();
                 entry1.column = "A";
                 entry1.row = 1;
                 await repo.save(entry1);
 
-                const entry11 = new MultiIdMaterialized();
+                const entry11 = new Entity();
                 entry11.column = "B";
                 entry11.row = 1;
                 entry11.parent = entry1;
                 await repo.save(entry11);
 
-                const entry12 = new MultiIdMaterialized();
+                const entry12 = new Entity();
                 entry12.column = "B";
                 entry12.row = 2;
                 entry12.parent = entry1;
                 await repo.save(entry12);
 
-                const entry121 = new MultiIdMaterialized();
+                const entry121 = new Entity();
                 entry121.column = "C";
                 entry121.row = 2;
                 entry121.parent = entry12;
                 await repo.save(entry121);
 
-                const entry1211 = new MultiIdMaterialized();
+                const entry1211 = new Entity();
                 entry1211.column = "D";
                 entry1211.row = 2;
                 entry1211.parent = entry121;
@@ -1724,32 +1805,33 @@ describe("github issues > #7155", () => {
     it("(Materialized/MultiID/Save) Move branch with single root via children", () =>
         Promise.all(
             connections.map(async (connection) => {
-                const repo = connection.getTreeRepository(MultiIdMaterialized);
+                const Entity = getEntity(connection, "multi_materialized");
+                const repo = connection.getTreeRepository(Entity);
 
-                const entry1 = new MultiIdMaterialized();
+                const entry1 = new Entity();
                 entry1.column = "A";
                 entry1.row = 1;
                 await repo.save(entry1);
 
-                const entry11 = new MultiIdMaterialized();
+                const entry11 = new Entity();
                 entry11.column = "B";
                 entry11.row = 1;
                 entry11.parent = entry1;
                 await repo.save(entry11);
 
-                const entry12 = new MultiIdMaterialized();
+                const entry12 = new Entity();
                 entry12.column = "B";
                 entry12.row = 2;
                 entry12.parent = entry1;
                 await repo.save(entry12);
 
-                const entry121 = new MultiIdMaterialized();
+                const entry121 = new Entity();
                 entry121.column = "C";
                 entry121.row = 2;
                 entry121.parent = entry12;
                 await repo.save(entry121);
 
-                const entry1211 = new MultiIdMaterialized();
+                const entry1211 = new Entity();
                 entry1211.column = "D";
                 entry1211.row = 2;
                 entry1211.parent = entry121;
@@ -1768,38 +1850,39 @@ describe("github issues > #7155", () => {
     it("(Materialized/MultiID/Save) Move multiple branches with single root via children", () =>
         Promise.all(
             connections.map(async (connection) => {
-                const repo = connection.getTreeRepository(MultiIdMaterialized);
+                const Entity = getEntity(connection, "multi_materialized");
+                const repo = connection.getTreeRepository(Entity);
 
-                const entry1 = new MultiIdMaterialized();
+                const entry1 = new Entity();
                 entry1.column = "A";
                 entry1.row = 1;
                 await repo.save(entry1);
 
-                const entry11 = new MultiIdMaterialized();
+                const entry11 = new Entity();
                 entry11.column = "B";
                 entry11.row = 1;
                 entry11.parent = entry1;
                 await repo.save(entry11);
 
-                const entry111 = new MultiIdMaterialized();
+                const entry111 = new Entity();
                 entry111.column = "C";
                 entry111.row = 1;
                 entry111.parent = entry11;
                 await repo.save(entry111);
 
-                const entry12 = new MultiIdMaterialized();
+                const entry12 = new Entity();
                 entry12.column = "B";
                 entry12.row = 2;
                 entry12.parent = entry1;
                 await repo.save(entry12);
 
-                const entry121 = new MultiIdMaterialized();
+                const entry121 = new Entity();
                 entry121.column = "C";
                 entry121.row = 2;
                 entry121.parent = entry12;
                 await repo.save(entry121);
 
-                const entry1211 = new MultiIdMaterialized();
+                const entry1211 = new Entity();
                 entry1211.column = "D";
                 entry1211.row = 2;
                 entry1211.parent = entry121;
@@ -1823,19 +1906,20 @@ describe("github issues > #7155", () => {
     it("(Materialized/MultiID/Remove) Remove leaf with multi root", () =>
         Promise.all(
             connections.map(async (connection) => {
-                const repo = connection.getTreeRepository(MultiIdMaterialized);
+                const Entity = getEntity(connection, "multi_materialized");
+                const repo = connection.getTreeRepository(Entity);
 
-                const entry1 = new MultiIdMaterialized();
+                const entry1 = new Entity();
                 entry1.column = "A";
                 entry1.row = 1;
                 await repo.save(entry1);
 
-                const entry2 = new MultiIdMaterialized();
+                const entry2 = new Entity();
                 entry2.column = "B";
                 entry2.row = 1;
                 await repo.save(entry2);
 
-                const entry11 = new MultiIdMaterialized();
+                const entry11 = new Entity();
                 entry11.column = "A";
                 entry11.row = 2;
                 entry11.parent = entry1;
@@ -1853,32 +1937,38 @@ describe("github issues > #7155", () => {
     it("(Materialized/MultiID/Remove) Remove branch with single root", () =>
         Promise.all(
             connections.map(async (connection) => {
-                const repo = connection.getTreeRepository(MultiIdMaterialized);
+                if (connection.driver instanceof SqlServerDriver) {
+                    // This test will not working on sql server
+                    return;
+                }
 
-                const entry1 = new MultiIdMaterialized();
+                const Entity = getEntity(connection, "multi_materialized");
+                const repo = connection.getTreeRepository(Entity);
+
+                const entry1 = new Entity();
                 entry1.column = "A";
                 entry1.row = 1;
                 await repo.save(entry1);
 
-                const entry11 = new MultiIdMaterialized();
+                const entry11 = new Entity();
                 entry11.column = "A";
                 entry11.row = 2;
                 entry11.parent = entry1;
                 await repo.save(entry11);
 
-                const entry12 = new MultiIdMaterialized();
+                const entry12 = new Entity();
                 entry12.column = "B";
                 entry12.row = 2;
                 entry12.parent = entry1;
                 await repo.save(entry12);
 
-                const entry111 = new MultiIdMaterialized();
+                const entry111 = new Entity();
                 entry111.column = "C";
                 entry111.row = 1;
                 entry111.parent = entry11;
                 await repo.save(entry111);
 
-                const entry1111 = new MultiIdMaterialized();
+                const entry1111 = new Entity();
                 entry1111.column = "D";
                 entry1111.row = 1;
                 entry1111.parent = entry111;
@@ -1896,38 +1986,44 @@ describe("github issues > #7155", () => {
     it("(Materialized/MultiID/Remove) Remove multiple branches with single root", () =>
         Promise.all(
             connections.map(async (connection) => {
-                const repo = connection.getTreeRepository(MultiIdMaterialized);
+                if (connection.driver instanceof SqlServerDriver) {
+                    // This test will not working on sql server
+                    return;
+                }
 
-                const entry1 = new MultiIdMaterialized();
+                const Entity = getEntity(connection, "multi_materialized");
+                const repo = connection.getTreeRepository(Entity);
+
+                const entry1 = new Entity();
                 entry1.column = "A";
                 entry1.row = 1;
                 await repo.save(entry1);
 
-                const entry11 = new MultiIdMaterialized();
+                const entry11 = new Entity();
                 entry11.column = "B";
                 entry11.row = 1;
                 entry11.parent = entry1;
                 await repo.save(entry11);
 
-                const entry111 = new MultiIdMaterialized();
+                const entry111 = new Entity();
                 entry111.column = "C";
                 entry111.row = 1;
                 entry111.parent = entry11;
                 await repo.save(entry111);
 
-                const entry12 = new MultiIdMaterialized();
+                const entry12 = new Entity();
                 entry12.column = "B";
                 entry12.row = 2;
                 entry12.parent = entry1;
                 await repo.save(entry12);
 
-                const entry121 = new MultiIdMaterialized();
+                const entry121 = new Entity();
                 entry121.column = "C";
                 entry121.row = 2;
                 entry121.parent = entry12;
                 await repo.save(entry121);
 
-                const entry1211 = new MultiIdMaterialized();
+                const entry1211 = new Entity();
                 entry1211.column = "D";
                 entry1211.row = 2;
                 entry1211.parent = entry121;
@@ -1943,6 +2039,28 @@ describe("github issues > #7155", () => {
                 descendants.length.should.be.eql(2);
             })
         ));
+
+
+    /**
+     * ------------------ EXTRA ------------------
+     */
+    it("(SQL Server) Check if tree entity with a onDelete: CASCADE on the parent throws an error", () =>
+    Promise.all(
+        connections.map(async (connection) => {
+            if (!(connection.driver instanceof SqlServerDriver)) {
+                // Only run this test for sql server.
+                return;
+            }
+
+            try {
+                connection.getTreeRepository(SingleIdClosure);
+            } catch (error) {
+                assert.instanceOf(error, Error);
+                return;
+            }
+            assert.fail("Should have thrown an error.");
+        })
+    ));
 });
 
 
@@ -2009,3 +2127,52 @@ function isResultExpected(results: ObjectLiteral[], expectedResults: ObjectLiter
             && Object.keys(result).every(key => result[key] === expectedResults[index][key]);
     });
 }
+
+async function generateConnections(): Promise<Connection[]> {
+    const connections = await Promise.all([createTestingConnections({
+        entities: [__dirname + "/entity/Remaining{.js,.ts}"],
+        enabledDrivers: ["mysql", "postgres"]
+    }), createTestingConnections({
+        entities: [__dirname + "/entity/SqlServer*{.js,.ts}"],
+        enabledDrivers: ["mssql"]
+    })]);
+
+    let result: Connection[] = [];
+    for (const connection of connections) {
+        result = result.concat(connection);
+    }
+
+    return result;
+}
+
+function getEntity(connection: Connection, type: EntityType): any {
+    if (connection.driver instanceof SqlServerDriver) {
+        return entityMap[type]["mssql"];
+    }
+    return entityMap[type]["other"];
+}
+
+type EntityType = "single_closure" | "single_nested" | "single_materialized" | "multi_nested" | "multi_materialized";
+
+const entityMap = {
+    single_closure: {
+        mssql: SqlServerSingleIdClosure,
+        other: SingleIdClosure
+    },
+    single_nested: {
+        mssql: SqlServerSingleIdNested,
+        other: SingleIdNested
+    },
+    single_materialized: {
+        mssql: SqlServerSingleIdMaterialized,
+        other: SingleIdMaterialized
+    },
+    multi_nested: {
+        mssql: SqlServerMultiIdNested,
+        other: MultiIdNested
+    },
+    multi_materialized: {
+        mssql: SqlServerMultiIdMaterialized,
+        other: MultiIdMaterialized
+    }
+};
