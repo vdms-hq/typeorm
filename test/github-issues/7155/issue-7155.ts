@@ -2130,7 +2130,7 @@ function isResultExpected(results: ObjectLiteral[], expectedResults: ObjectLiter
 
 async function generateConnections(): Promise<Connection[]> {
     const connections = await Promise.all([createTestingConnections({
-        entities: [__dirname + "/entity/Remaining{.js,.ts}"],
+        entities: [__dirname + "/entity/Remaining*{.js,.ts}"],
         enabledDrivers: ["mysql", "postgres"]
     }), createTestingConnections({
         entities: [__dirname + "/entity/SqlServer*{.js,.ts}"],
