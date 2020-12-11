@@ -7,9 +7,9 @@ import {
     createTestingConnections,
     reloadTestingDatabases
 } from "../../utils/test-utils";
+import { OtherRelation, Relation, RelationClosure, RelationMaterialized, RelationNested } from "./entity/RelationEntities";
 import {
-    MultiIdMaterialized, MultiIdNested, OtherRelation, Relation, RelationClosure,
-    RelationMaterialized, RelationNested, SingleIdClosure, SingleIdMaterialized, SingleIdNested
+    MultiIdMaterialized, MultiIdNested, SingleIdClosure, SingleIdMaterialized, SingleIdNested
 } from "./entity/RemainingTreeEntities";
 import {
     SqlServerMultiIdMaterialized, SqlServerMultiIdNested, SqlServerSingleIdClosure,
@@ -2075,7 +2075,7 @@ describe("github issues > #7155 > tree relations", () => {
     before(
         async () =>
             (connections = await createTestingConnections({
-                entities: [__dirname + "/entity/Remaining*{.js,.ts}"],
+                entities: [__dirname + "/entity/RelationEntities{.js,.ts}"],
                 enabledDrivers: ["mysql", "postgres", "mssql"]
             }))
     );
