@@ -2067,6 +2067,20 @@ describe("github issues > #7155", () => {
                 assert.fail("Should have thrown an error.");
             })
         ));
+});
+
+
+describe("github issues > #7155 > tree relations", () => {
+    let connections: Connection[];
+    before(
+        async () =>
+            (connections = await createTestingConnections({
+                entities: [__dirname + "/entity/Remaining*{.js,.ts}"],
+                enabledDrivers: ["mysql", "postgres", "mssql"]
+            }))
+    );
+    beforeEach(() => reloadTestingDatabases(connections));
+    after(() => closeTestingConnections(connections));
 
     it("(Closure) Validate relations", () =>
         Promise.all(
