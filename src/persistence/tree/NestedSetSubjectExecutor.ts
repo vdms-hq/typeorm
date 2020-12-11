@@ -90,7 +90,7 @@ export class NestedSetSubjectExecutor {
             parent = subject.parentSubject.entity;
 
         let entity = subject.databaseEntity; // if entity was attached via parent
-        if (!entity) // if entity was attached via children
+        if (!entity && parent) // if entity was attached via children
             entity = subject.metadata.treeChildrenRelation!.getEntityValue(parent).find((child: any) => {
                 return Object.entries(subject.identifier!).every(([key, value]) => child[key] === value);
             });

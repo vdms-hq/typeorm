@@ -7,8 +7,14 @@ import {
     createTestingConnections,
     reloadTestingDatabases
 } from "../../utils/test-utils";
-import { MultiIdMaterialized, MultiIdNested, SingleIdClosure, SingleIdMaterialized, SingleIdNested } from "./entity/RemainingTreeEntities";
-import { SqlServerMultiIdMaterialized, SqlServerMultiIdNested, SqlServerSingleIdClosure, SqlServerSingleIdMaterialized, SqlServerSingleIdNested } from "./entity/SqlServerTreeEntities";
+import {
+    MultiIdMaterialized, MultiIdNested, OtherRelation, Relation, RelationClosure,
+    RelationMaterialized, RelationNested, SingleIdClosure, SingleIdMaterialized, SingleIdNested
+} from "./entity/RemainingTreeEntities";
+import {
+    SqlServerMultiIdMaterialized, SqlServerMultiIdNested, SqlServerSingleIdClosure,
+    SqlServerSingleIdMaterialized, SqlServerSingleIdNested
+} from "./entity/SqlServerTreeEntities";
 
 describe("github issues > #7155", () => {
     let connections: Connection[];
@@ -2045,22 +2051,76 @@ describe("github issues > #7155", () => {
      * ------------------ EXTRA ------------------
      */
     it("(SQL Server) Check if tree entity with a onDelete: CASCADE on the parent throws an error", () =>
-    Promise.all(
-        connections.map(async (connection) => {
-            if (!(connection.driver instanceof SqlServerDriver)) {
-                // Only run this test for sql server.
-                return;
-            }
+        Promise.all(
+            connections.map(async (connection) => {
+                if (!(connection.driver instanceof SqlServerDriver)) {
+                    // Only run this test for sql server.
+                    return;
+                }
 
-            try {
-                connection.getTreeRepository(SingleIdClosure);
-            } catch (error) {
-                assert.instanceOf(error, Error);
-                return;
-            }
-            assert.fail("Should have thrown an error.");
-        })
-    ));
+                try {
+                    connection.getTreeRepository(SingleIdClosure);
+                } catch (error) {
+                    assert.instanceOf(error, Error);
+                    return;
+                }
+                assert.fail("Should have thrown an error.");
+            })
+        ));
+
+    it("(Closure) Validate relations", () =>
+        Promise.all(
+            connections.map(async (connection) => {
+                const repo = connection.getTreeRepository(RelationClosure);
+                const relationRepo = connection.getRepository(Relation);
+
+                const relation = new Relation();
+                await relationRepo.save(relation);
+
+                const relationEntity = new RelationClosure();
+                relationEntity.relation = relation;
+                relationEntity.otherRelation = new OtherRelation();
+
+                const result = await repo.save(relationEntity);
+                result.should.exist;
+            })
+        ));
+
+    it("(Nested) Validate relations", () =>
+        Promise.all(
+            connections.map(async (connection) => {
+                const repo = connection.getTreeRepository(RelationNested);
+                const relationRepo = connection.getRepository(Relation);
+
+                const relation = new Relation();
+                await relationRepo.save(relation);
+
+                const relationEntity = new RelationNested();
+                relationEntity.relation = relation;
+                relationEntity.otherRelation = new OtherRelation();
+
+                const result = await repo.save(relationEntity);
+                result.should.exist;
+            })
+        ));
+
+    it("(Materialized) Validate relations", () =>
+        Promise.all(
+            connections.map(async (connection) => {
+                const repo = connection.getTreeRepository(RelationMaterialized);
+                const relationRepo = connection.getRepository(Relation);
+
+                const relation = new Relation();
+                await relationRepo.save(relation);
+
+                const relationEntity = new RelationMaterialized();
+                relationEntity.relation = relation;
+                relationEntity.otherRelation = new OtherRelation();
+
+                const result = await repo.save(relationEntity);
+                result.should.exist;
+            })
+        ));
 });
 
 

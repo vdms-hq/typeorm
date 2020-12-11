@@ -66,7 +66,7 @@ export class ClosureSubjectExecutor {
             parent = subject.parentSubject.entity;
 
         let entity = subject.databaseEntity; // if entity was attached via parent
-        if (!entity) // if entity was attached via children
+        if (!entity && parent) // if entity was attached via children
             entity = subject.metadata.treeChildrenRelation!.getEntityValue(parent).find((child: any) => {
                 return Object.entries(subject.identifier!).every(([key, value]) => child[key] === value);
             });
@@ -191,39 +191,38 @@ export class ClosureSubjectExecutor {
     /**
     * Executes operations when subject is being removed.
     */
-   async remove(subjects: Subject|Subject[]): Promise<void> {
+    async remove(subjects: Subject|Subject[]): Promise<void> {
+        // Only mssql need to execute deletes for the juntion table as it doesn't support multi cascade paths.
+        if (!(this.queryRunner.connection.driver instanceof SqlServerDriver)) {
+            return;
+        }
 
-    // Only mssql need to execute deletes for the juntion table as it doesn't support multi cascade paths.
-    if (!(this.queryRunner.connection.driver instanceof SqlServerDriver)) {
-        return;
+        if (!Array.isArray(subjects))
+            subjects = [subjects];
+
+        const escape = (alias: string) => this.queryRunner.connection.driver.escape(alias);
+        const identifiers = subjects.map(subject => subject.identifier);
+        const closureTable = subjects[0].metadata.closureJunctionTable;
+
+        const generateWheres = (columns: ColumnMetadata[]) => {
+            return columns.map(column => {
+                const data = identifiers.map(identifier => identifier![column.referencedColumn!.databaseName]);
+                return `${escape(column.databaseName)} IN (${data.join(", ")})`;
+            }).join(" AND ");
+        };
+
+        const ancestorWhere = generateWheres(closureTable.ancestorColumns);
+        const descendantWhere = generateWheres(closureTable.descendantColumns);
+
+        await this.queryRunner
+            .manager
+            .createQueryBuilder()
+            .delete()
+            .from(closureTable.tablePath)
+            .where(ancestorWhere)
+            .orWhere(descendantWhere)
+            .execute();
     }
-
-    if (!Array.isArray(subjects))
-        subjects = [subjects];
-
-    const escape = (alias: string) => this.queryRunner.connection.driver.escape(alias);
-    const identifiers = subjects.map(subject => subject.identifier);
-    const closureTable = subjects[0].metadata.closureJunctionTable;
-
-    const generateWheres = (columns: ColumnMetadata[]) => {
-        return columns.map(column => {
-            const data = identifiers.map(identifier => identifier![column.referencedColumn!.databaseName]);
-            return `${escape(column.databaseName)} IN (${data.join(", ")})`;
-        }).join(" AND ");
-    };
-
-    const ancestorWhere = generateWheres(closureTable.ancestorColumns);
-    const descendantWhere = generateWheres(closureTable.descendantColumns);
-
-    await this.queryRunner
-        .manager
-        .createQueryBuilder()
-        .delete()
-        .from(closureTable.tablePath)
-        .where(ancestorWhere)
-        .orWhere(descendantWhere)
-        .execute();
-}
 
     /**
      * Inserts the rows into the closure table for a given entity
