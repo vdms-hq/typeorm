@@ -33,7 +33,7 @@ export class ClosureJunctionEntityMetadataBuilder {
             connection: this.connection,
             args: {
                 target: "",
-                name: parentClosureEntityMetadata.tableNameWithoutPrefix,
+                name: parentClosureEntityMetadata.treeOptions && parentClosureEntityMetadata.treeOptions.closureTableName ? parentClosureEntityMetadata.treeOptions.closureTableName : parentClosureEntityMetadata.tableNameWithoutPrefix,
                 type: "closure-junction"
             }
         });
@@ -49,7 +49,7 @@ export class ClosureJunctionEntityMetadataBuilder {
                 args: {
                     target: "",
                     mode: "virtual",
-                    propertyName: primaryColumn.propertyName + "_ancestor", // todo: naming strategy
+                    propertyName: parentClosureEntityMetadata.treeOptions && parentClosureEntityMetadata.treeOptions.ancestorColumnName ? parentClosureEntityMetadata.treeOptions.ancestorColumnName(primaryColumn) : primaryColumn.propertyName + "_ancestor",
                     options: {
                         primary: true,
                         length: primaryColumn.length,
@@ -65,7 +65,7 @@ export class ClosureJunctionEntityMetadataBuilder {
                 args: {
                     target: "",
                     mode: "virtual",
-                    propertyName: primaryColumn.propertyName + "_descendant",
+                    propertyName: parentClosureEntityMetadata.treeOptions && parentClosureEntityMetadata.treeOptions.descendantColumnName ? parentClosureEntityMetadata.treeOptions.descendantColumnName(primaryColumn) : primaryColumn.propertyName + "_descendant",
                     options: {
                         primary: true,
                         length: primaryColumn.length,
