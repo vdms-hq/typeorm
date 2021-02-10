@@ -1812,7 +1812,7 @@ export class MysqlQueryRunner extends BaseQueryRunner implements QueryRunner {
      * Escapes a given comment so it's safe to include in a query.
      */
     protected escapeComment(comment?: string) {
-        if (comment === undefined || comment.length === 0) {
+        if (!comment || comment.length === 0) {
             return `''`;
         }
 
@@ -1857,15 +1857,22 @@ export class MysqlQueryRunner extends BaseQueryRunner implements QueryRunner {
             c += ` CHARACTER SET "${column.charset}"`;
         if (column.collation)
             c += ` COLLATE "${column.collation}"`;
-        if (!column.isNullable)
-            c += " NOT NULL";
-        if (column.isNullable)
-            c += " NULL";
+
+        const isMariaDb = this.driver.options.type === "mariadb";
+        if (isMariaDb && column.asExpression && (column.generatedType || "VIRTUAL") === "VIRTUAL") {
+            // do nothing - MariaDB does not support NULL/NOT NULL expressions for VIRTUAL columns
+        } else {   
+            if (!column.isNullable)
+                c += " NOT NULL";
+            if (column.isNullable)
+                c += " NULL";
+        }
+
         if (column.isPrimary && !skipPrimary)
             c += " PRIMARY KEY";
         if (column.isGenerated && column.generationStrategy === "increment") // don't use skipPrimary here since updates can update already exist primary without auto inc.
             c += " AUTO_INCREMENT";
-        if (column.comment !== undefined && column.comment.length > 0)
+        if (column.comment && column.comment.length > 0)
             c += ` COMMENT ${this.escapeComment(column.comment)}`;
         if (column.default !== undefined && column.default !== null)
             c += ` DEFAULT ${column.default}`;
