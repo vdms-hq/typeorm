@@ -248,10 +248,26 @@ export class MysqlQueryRunner extends BaseQueryRunner implements QueryRunner {
     }
 
     /**
+     * Loads currently using database
+     */
+    async getCurrentDatabase(): Promise<string> {
+        const query = await this.query(`SELECT DATABASE() AS \`db_name\``);
+        return query[0]["db_name"];
+    }
+
+    /**
      * Checks if schema with the given name exist.
      */
     async hasSchema(schema: string): Promise<boolean> {
         throw new Error(`MySql driver does not support table schemas`);
+    }
+
+    /**
+     * Loads currently using database schema
+     */
+    async getCurrentSchema(): Promise<string> {
+        const query = await this.query(`SELECT SCHEMA() AS \`schema_name\``);
+        return query[0]["schema_name"];
     }
 
     /**
@@ -1180,14 +1196,6 @@ export class MysqlQueryRunner extends BaseQueryRunner implements QueryRunner {
     // Protected Methods
     // -------------------------------------------------------------------------
 
-    /**
-     * Returns current database.
-     */
-    protected async getCurrentDatabase(): Promise<string> {
-        const currentDBQuery = await this.query(`SELECT DATABASE() AS \`db_name\``);
-        return currentDBQuery[0]["db_name"];
-    }
-
     protected async loadViews(viewNames: string[]): Promise<View[]> {
         const hasTable = await this.hasTable(this.getTypeormMetadataTableName());
         if (!hasTable)
@@ -1529,7 +1537,7 @@ export class MysqlQueryRunner extends BaseQueryRunner implements QueryRunner {
 
                     if (tableColumn.type === "enum" || tableColumn.type === "simple-enum" || tableColumn.type === "set") {
                         const colType = dbColumn["COLUMN_TYPE"];
-                        const items = colType.substring(colType.indexOf("(") + 1, colType.indexOf(")")).split(",");
+                        const items = colType.substring(colType.indexOf("(") + 1, colType.lastIndexOf(")")).split(",");
                         tableColumn.enum = (items as string[]).map(item => {
                             return item.substring(1, item.length - 1);
                         });
@@ -1812,14 +1820,14 @@ export class MysqlQueryRunner extends BaseQueryRunner implements QueryRunner {
      * Escapes a given comment so it's safe to include in a query.
      */
     protected escapeComment(comment?: string) {
-        if (comment === undefined || comment.length === 0) {
+        if (!comment || comment.length === 0) {
             return `''`;
         }
 
         comment = comment
-            .replace("\\", "\\\\") // MySQL allows escaping characters via backslashes
-            .replace("'", "''")
-            .replace("\0", ""); // Null bytes aren't allowed in comments
+            .replace(/\\/g, "\\\\") // MySQL allows escaping characters via backslashes
+            .replace(/'/g, "''")
+            .replace(/\u0000/g, ""); // Null bytes aren't allowed in comments
 
         return `'${comment}'`;
     }
@@ -1857,15 +1865,22 @@ export class MysqlQueryRunner extends BaseQueryRunner implements QueryRunner {
             c += ` CHARACTER SET "${column.charset}"`;
         if (column.collation)
             c += ` COLLATE "${column.collation}"`;
-        if (!column.isNullable)
-            c += " NOT NULL";
-        if (column.isNullable)
-            c += " NULL";
+
+        const isMariaDb = this.driver.options.type === "mariadb";
+        if (isMariaDb && column.asExpression && (column.generatedType || "VIRTUAL") === "VIRTUAL") {
+            // do nothing - MariaDB does not support NULL/NOT NULL expressions for VIRTUAL columns
+        } else {
+            if (!column.isNullable)
+                c += " NOT NULL";
+            if (column.isNullable)
+                c += " NULL";
+        }
+
         if (column.isPrimary && !skipPrimary)
             c += " PRIMARY KEY";
         if (column.isGenerated && column.generationStrategy === "increment") // don't use skipPrimary here since updates can update already exist primary without auto inc.
             c += " AUTO_INCREMENT";
-        if (column.comment !== undefined && column.comment.length > 0)
+        if (column.comment && column.comment.length > 0)
             c += ` COMMENT ${this.escapeComment(column.comment)}`;
         if (column.default !== undefined && column.default !== null)
             c += ` DEFAULT ${column.default}`;
